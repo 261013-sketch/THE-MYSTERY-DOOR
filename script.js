@@ -378,7 +378,7 @@ const componentsBank = {
       componentName: "Zener Diode",
       definition: "A special semiconductor diode designed to reliably allow current to flow backward when a specific reverse breakdown voltage is reached.",
       clues: [
-        { door: "01", en: "It is a heavily doped semiconductor junction device with a bent cathode bar in its symbol.", es: "Es un dispositivo semiconductor fuertemente dopado con una barra de cátodo doblada en su símbolo." },
+        { door: "01", en: "It is a heavily doped semiconductor junction device with a bent cathode bar in its symbol.", es: "Es un dispositivo semiconductor fuencemente dopado con una barra de cátodo doblada en su símbolo." },
         { door: "02", en: "Unlike standard rectifiers, it is intentionally operated in the reverse-bias breakdown region.", es: "A diferencia de los rectificadores comunes, se opera intencionalmente en polarización inversa." },
         { door: "03", en: "Once its specific breakdown threshold is reached, it maintains an almost constant voltage across itself.", es: "Al alcanzar su umbral de ruptura específico, mantiene un voltaje casi constante entre sus terminales." },
         { door: "04", en: "It is widely used as a simple shunt voltage reference and over-voltage clamping protector.", es: "Se usa ampliamente como referencia simple de voltaje y protección contra sobretensiones." }
@@ -500,18 +500,19 @@ let rivalAttemptsLeft = 3;
 let roundLockedForMe = false;
 let roundResults = [];
 
-// PeerJS (1 vs 1)
+// PeerJS (1 vs 1 y Torneo Multijugador)
 let isHost = false;
 let peer = null;
-let conn = null;
+let conn = null; // Conexión 1v1 o Cliente->Host Torneo
+let tourneyConnections = []; // Conexiones Host->Clientes Torneo
 
-// Estado Torneo (1 a 30 jugadores)
+// Estado Torneo Online (hasta 30 dispositivos por código)
 let tourneyPlayers = [];
+let myTourneyId = 'host';
 let tourneyTotalRounds = 5;
 let currentTourneyRound = 0;
-let currentPlayerTurnIdx = 0;
 let eliminationEnabled = true;
-let progressiveDeck = [];
+let roundAnsweredByMe = false;
 
 // Sintetizador Web Audio
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -547,19 +548,21 @@ function showScreen(screenId) {
   document.getElementById(screenId).classList.add('active');
 }
 
-function closePvpConnection() {
+function closeAllConnections() {
   if (conn) { try { conn.close(); } catch(e) {} conn = null; }
+  tourneyConnections.forEach(c => { try { c.close(); } catch(e) {} });
+  tourneyConnections = [];
   if (peer) { try { peer.destroy(); } catch(e) {} peer = null; }
 }
 
 function goHome() {
-  closePvpConnection();
+  closeAllConnections();
   playTone(300, 'sine', 0.1);
   showScreen('screen-home');
 }
 
 function openModeSelect() {
-  closePvpConnection();
+  closeAllConnections();
   playTone(520, 'square', 0.14);
   showScreen('screen-modes');
 }
@@ -616,11 +619,8 @@ function selectDifficulty(diff) {
 }
 
 function launchSelectedDiffMode() {
-  if (pendingDiffTarget === 'solo') {
-    startSoloGame();
-  } else {
-    openPvpLobby();
-  }
+  if (pendingDiffTarget === 'solo') startSoloGame();
+  else openPvpLobby();
 }
 
 function shuffleArray(arr) {
@@ -667,18 +667,16 @@ function openPvpLobby() {
 }
 
 function createPvpRoom() {
-  closePvpConnection();
+  closeAllConnections();
   isHost = true;
   activeMode = 'pvp';
 
   const shortCode = Math.floor(1000 + Math.random() * 9000).toString();
-  const fullPeerId = `mech-door-${shortCode}`;
-
   document.getElementById('host-code-display').classList.remove('hidden');
   document.getElementById('generated-room-code').innerText = shortCode;
   document.getElementById('host-wait-status').innerText = 'Connecting to network...';
 
-  peer = new Peer(fullPeerId);
+  peer = new Peer(`mech-door-${shortCode}`);
 
   peer.on('open', () => {
     document.getElementById('host-wait-status').innerText = 'Waiting for rival to join...';
@@ -721,7 +719,7 @@ function joinPvpRoom() {
     return;
   }
 
-  closePvpConnection();
+  closeAllConnections();
   isHost = false;
   activeMode = 'pvp';
   statusEl.className = 'feedback-msg';
@@ -826,98 +824,242 @@ function startSoloOrPvpRound(index) {
 }
 
 // =========================================================================
-// MODO 3: TORNEO (1 A 30 JUGADORES + PROGRESIVO + ELIMINACIÓN)
+// MODO 3: TORNEO MULTIJUGADOR ONLINE POR CÓDIGO DE SALA (HASTA 30 DISPOSITIVOS)
 // =========================================================================
 function openTourneySetup() {
-  renderPlayerNameInputs();
+  document.getElementById('tourney-host-panel').classList.add('hidden');
+  document.getElementById('tourney-client-roster').classList.add('hidden');
+  document.getElementById('tourney-join-status').innerText = '';
+  document.getElementById('tourney-join-code').value = '';
   showScreen('screen-tourney-setup');
 }
 
-function renderPlayerNameInputs() {
-  let count = parseInt(document.getElementById('num-players-input').value, 10) || 1;
-  if (count < 1) count = 1;
-  if (count > 30) count = 30;
-  document.getElementById('num-players-input').value = count;
-
-  const grid = document.getElementById('player-names-grid');
-  const existingValues = Array.from(grid.querySelectorAll('input')).map(inp => inp.value);
-  grid.innerHTML = '';
-
-  for (let i = 0; i < count; i++) {
-    const inp = document.createElement('input');
-    inp.type = 'text';
-    inp.className = 'player-name-input';
-    inp.maxLength = 18;
-    inp.value = existingValues[i] || (i === 0 && userProfileName ? userProfileName : `Player ${i + 1}`);
-    grid.appendChild(inp);
-  }
-}
-
-function startTournament() {
+function createTourneyRoom() {
+  closeAllConnections();
+  isHost = true;
   activeMode = 'tourney';
-  const nameInputs = Array.from(document.querySelectorAll('#player-names-grid input'));
-  tourneyPlayers = nameInputs.map((inp, idx) => ({
-    listNumber: idx + 1,
-    name: inp.value.trim() || `Player ${idx + 1}`,
+  myTourneyId = 'host';
+
+  const shortCode = Math.floor(1000 + Math.random() * 9000).toString();
+  document.getElementById('tourney-host-panel').classList.remove('hidden');
+  document.getElementById('tourney-room-code').innerText = shortCode;
+  document.getElementById('tourney-host-status').innerText = 'Connecting room...';
+
+  tourneyPlayers = [{
+    id: 'host',
+    listNumber: 1,
+    name: userProfileName || 'Host Player',
     score: 0,
     lives: 3,
     eliminated: false
-  }));
+  }];
+  renderTourneyRosterPills('tourney-roster-list');
 
+  peer = new Peer(`mech-tourney-${shortCode}`);
+
+  peer.on('open', () => {
+    document.getElementById('tourney-host-status').innerText = 'Room open! Share code with players:';
+  });
+
+  peer.on('connection', (clientConn) => {
+    if (tourneyPlayers.length >= 30) {
+      clientConn.close();
+      return;
+    }
+    tourneyConnections.push(clientConn);
+
+    clientConn.on('data', (data) => {
+      if (data.type === 'JOIN_TOURNEY') {
+        const newListNum = tourneyPlayers.length + 1;
+        const playerObj = {
+          id: clientConn.peer,
+          listNumber: newListNum,
+          name: (data.name || `Player ${newListNum}`).substring(0, 18),
+          score: 0,
+          lives: 3,
+          eliminated: false
+        };
+        tourneyPlayers.push(playerObj);
+        renderTourneyRosterPills('tourney-roster-list');
+        broadcastTourney({ type: 'ROSTER_UPDATE', players: tourneyPlayers });
+      } else if (data.type === 'CLIENT_SCORE_UPDATE') {
+        const p = tourneyPlayers.find(pl => pl.id === data.playerId);
+        if (p) {
+          p.score = data.score;
+          p.lives = data.lives;
+          p.eliminated = data.eliminated;
+          broadcastTourney({ type: 'ROSTER_UPDATE', players: tourneyPlayers });
+        }
+      }
+    });
+
+    clientConn.on('close', () => {
+      tourneyConnections = tourneyConnections.filter(c => c !== clientConn);
+    });
+  });
+
+  peer.on('error', () => {
+    document.getElementById('tourney-host-status').innerText = '⚠️ Network error. Try creating room again.';
+  });
+}
+
+function joinTourneyRoom() {
+  const code = document.getElementById('tourney-join-code').value.trim();
+  const statusEl = document.getElementById('tourney-join-status');
+
+  if (code.length !== 4) {
+    statusEl.className = 'feedback-msg feedback-error';
+    statusEl.innerText = '⚠️ Enter a 4-digit Tournament Code!';
+    return;
+  }
+
+  closeAllConnections();
+  isHost = false;
+  activeMode = 'tourney';
+  statusEl.className = 'feedback-msg';
+  statusEl.innerText = 'Joining tournament room...';
+
+  peer = new Peer();
+
+  peer.on('open', (myPeerId) => {
+    myTourneyId = myPeerId;
+    conn = peer.connect(`mech-tourney-${code}`);
+
+    conn.on('open', () => {
+      conn.send({ type: 'JOIN_TOURNEY', name: userProfileName || 'Player' });
+      statusEl.innerText = '✅ Connected! Waiting for host to start...';
+      document.getElementById('tourney-client-roster').classList.remove('hidden');
+    });
+
+    conn.on('data', (data) => {
+      if (data.type === 'ROSTER_UPDATE') {
+        tourneyPlayers = data.players;
+        renderTourneyRosterPills('tourney-client-roster');
+        updateTourneyHud();
+      } else if (data.type === 'START_TOURNEY_MATCH') {
+        activeRounds = data.rounds;
+        tourneyTotalRounds = data.totalRounds;
+        eliminationEnabled = data.eliminationEnabled;
+        tourneyPlayers = data.players;
+        setupTourneyHud();
+        startTourneyRound(0);
+      } else if (data.type === 'NEXT_TOURNEY_ROUND') {
+        tourneyPlayers = data.players;
+        startTourneyRound(data.roundIndex);
+      } else if (data.type === 'TOURNEY_GAME_OVER') {
+        tourneyPlayers = data.players;
+        showTourneyGameOver();
+      }
+    });
+
+    conn.on('close', () => {
+      alert('Disconnected from tournament host.');
+      goHome();
+    });
+  });
+
+  peer.on('error', () => {
+    statusEl.className = 'feedback-msg feedback-error';
+    statusEl.innerText = '❌ Tournament room not found. Check the code.';
+  });
+}
+
+function broadcastTourney(payload) {
+  tourneyConnections.forEach(c => {
+    if (c.open) c.send(payload);
+  });
+}
+
+function renderTourneyRosterPills(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = tourneyPlayers.map(p =>
+    `<span class="roster-pill">#${p.listNumber} ${p.name}</span>`
+  ).join('');
+}
+
+function startOnlineTournament() {
   let rounds = parseInt(document.getElementById('num-rounds-input').value, 10) || 5;
   if (rounds < 1) rounds = 1;
   if (rounds > 30) rounds = 30;
   tourneyTotalRounds = rounds;
   eliminationEnabled = document.getElementById('elimination-mode-checkbox').checked;
 
-  progressiveDeck = [
+  const fullDeck = [
     ...shuffleArray(componentsBank.easy),
     ...shuffleArray(componentsBank.normal),
     ...shuffleArray(componentsBank.hard)
   ];
 
-  currentTourneyRound = 0;
-  currentPlayerTurnIdx = 0;
+  activeRounds = [];
+  for (let r = 0; r < tourneyTotalRounds; r++) {
+    const ratio = tourneyTotalRounds === 1 ? 0 : r / (tourneyTotalRounds - 1);
+    const baseIdx = Math.floor(ratio * 27);
+    const jitter = Math.floor(Math.random() * 3);
+    activeRounds.push(fullDeck[Math.min(29, baseIdx + jitter)]);
+  }
 
+  broadcastTourney({
+    type: 'START_TOURNEY_MATCH',
+    rounds: activeRounds,
+    totalRounds: tourneyTotalRounds,
+    eliminationEnabled: eliminationEnabled,
+    players: tourneyPlayers
+  });
+
+  setupTourneyHud();
+  startTourneyRound(0);
+}
+
+function setupTourneyHud() {
   document.getElementById('hud-solo-score').classList.add('hidden');
   document.getElementById('hud-pvp-score').classList.add('hidden');
   document.getElementById('hud-tourney-banner').classList.remove('hidden');
   document.getElementById('btn-standings').classList.remove('hidden');
   document.getElementById('turn-callout').classList.remove('hidden');
   document.getElementById('pvp-rival-status').classList.add('hidden');
-
-  startTourneyTurn();
 }
 
-function getProgressiveComponent(roundIdx, totalRounds) {
-  const ratio = totalRounds === 1 ? 0 : roundIdx / (totalRounds - 1);
-  const baseIdx = Math.floor(ratio * 27);
-  const jitter = Math.floor(Math.random() * 3);
-  const finalIdx = Math.min(29, baseIdx + jitter);
-  return progressiveDeck[finalIdx];
+function getMyTourneyPlayer() {
+  return tourneyPlayers.find(p => p.id === myTourneyId) || tourneyPlayers[0];
 }
 
-function startTourneyTurn() {
-  const player = tourneyPlayers[currentPlayerTurnIdx];
-  const comp = getProgressiveComponent(currentTourneyRound, tourneyTotalRounds);
-  activeRounds[0] = comp;
-  currentRoundIndex = 0;
+function updateTourneyHud() {
+  const me = getMyTourneyPlayer();
+  if (!me) return;
+  document.getElementById('hud-player-name').innerText = `#${me.listNumber} ${me.name.toUpperCase()}`;
+  document.getElementById('hud-player-lives').innerText = '❤️ '.repeat(me.lives) + '🖤 '.repeat(3 - me.lives);
+  document.getElementById('hud-player-score').innerText = `${me.score} PTS`;
+}
+
+function startTourneyRound(roundIdx) {
+  currentRoundIndex = roundIdx;
+  currentTourneyRound = roundIdx;
   openedDoors = [false, false, false, false];
+  roundAnsweredByMe = false;
+
+  const comp = activeRounds[roundIdx];
+  const me = getMyTourneyPlayer();
+  updateTourneyHud();
 
   document.getElementById('hud-mode-badge').innerText = `🏆 TIER: ${comp.tier}`;
-  document.getElementById('hud-round-indicator').innerText = `ROUND ${currentTourneyRound + 1} / ${tourneyTotalRounds}`;
-  document.getElementById('hud-player-name').innerText = `#${player.listNumber} ${player.name.toUpperCase()}`;
-  document.getElementById('hud-player-lives').innerText = '❤️ '.repeat(player.lives) + '🖤 '.repeat(3 - player.lives);
-  document.getElementById('hud-player-score').innerText = `${player.score} PTS`;
-
-  document.getElementById('turn-callout').innerText = `🎮 #${player.listNumber} ${player.name.toUpperCase()}'S TURN`;
-  document.getElementById('doors-round-title').innerText = `ROUND ${currentTourneyRound + 1} / ${tourneyTotalRounds} • LEVEL: ${comp.tier}`;
+  document.getElementById('hud-round-indicator').innerText = `ROUND ${roundIdx + 1} / ${tourneyTotalRounds}`;
+  document.getElementById('turn-callout').innerText = `🎮 #${me.listNumber} ${me.name.toUpperCase()}`;
+  document.getElementById('doors-round-title').innerText = `ROUND ${roundIdx + 1} / ${tourneyTotalRounds} • LEVEL: ${comp.tier}`;
   document.getElementById('lives-label-text').innerText = 'GLOBAL LIVES LEFT:';
 
-  setInputsDisabled(false);
   clearInputsAndFeedback();
-  updateLivesDisplay(player.lives);
+  updateLivesDisplay(me.lives);
   renderDoors(comp);
+
+  if (me.eliminated && eliminationEnabled) {
+    setInputsDisabled(true);
+    document.getElementById('feedback-doors').className = 'feedback-msg feedback-error';
+    document.getElementById('feedback-doors').innerText = `💀 ELIMINATION: PLAYER ${me.listNumber} (${me.name.toUpperCase()}) — SPECTATING`;
+  } else {
+    setInputsDisabled(false);
+  }
+
   playTone(580, 'square', 0.16);
   showScreen('screen-doors');
 }
@@ -954,7 +1096,8 @@ function clearInputsAndFeedback() {
 }
 
 function updateLivesDisplay(livesCount) {
-  const heartsStr = '❤️ '.repeat(livesCount) + '🖤 '.repeat(3 - livesCount);
+  const safeLives = Math.max(0, livesCount);
+  const heartsStr = '❤️ '.repeat(safeLives) + '🖤 '.repeat(3 - safeLives);
   document.getElementById('lives-display').innerText = heartsStr.trim();
   document.getElementById('lives-display-clue').innerText = heartsStr.trim();
 }
@@ -989,7 +1132,7 @@ function openDoor(doorIdx) {
   document.getElementById('clue-es-text').innerText = clue.es;
   document.getElementById('clue-es-text').classList.add('hidden');
   document.getElementById('btn-toggle-es').innerText = '🌐 SHOW SPANISH TRANSLATION';
-  if (!roundLockedForMe) document.getElementById('feedback-clue').innerText = '';
+  if (!roundLockedForMe && !roundAnsweredByMe) document.getElementById('feedback-clue').innerText = '';
 
   playTone(440, 'triangle', 0.15);
   showScreen('screen-clue');
@@ -1007,13 +1150,13 @@ function toggleSpanish() {
 
 function backToDoors() {
   renderDoors(activeRounds[currentRoundIndex]);
-  if (!roundLockedForMe) document.getElementById('feedback-doors').innerText = '';
+  if (!roundLockedForMe && !roundAnsweredByMe) document.getElementById('feedback-doors').innerText = '';
   playTone(380, 'sine', 0.1);
   showScreen('screen-doors');
 }
 
 function checkAnswer(inputId) {
-  if (roundLockedForMe) return;
+  if (roundLockedForMe || roundAnsweredByMe) return;
 
   const inputEl = document.getElementById(inputId);
   const rawValue = inputEl.value.trim().toLowerCase();
@@ -1077,40 +1220,62 @@ function handleSoloOrPvpAnswer(isCorrect, feedbackEl, inputEl) {
 }
 
 function handleTourneyAnswer(isCorrect, feedbackEl, inputEl) {
-  const player = tourneyPlayers[currentPlayerTurnIdx];
-  const comp = activeRounds[0];
+  const me = getMyTourneyPlayer();
+  const comp = activeRounds[currentRoundIndex];
   const tagEl = document.getElementById('reveal-status-tag');
 
   if (isCorrect) {
-    player.score += 100;
-    document.getElementById('hud-player-score').innerText = `${player.score} PTS`;
+    roundAnsweredByMe = true;
+    me.score += 100;
+    updateTourneyHud();
+    syncMyTourneyStats(me);
 
-    tagEl.innerText = `✅ #${player.listNumber} ${player.name.toUpperCase()} +100 PTS!`;
+    tagEl.innerText = `✅ #${me.listNumber} ${me.name.toUpperCase()} +100 PTS!`;
     tagEl.className = 'solved-tag';
     playTone(523, 'square', 0.12);
     setTimeout(() => playTone(659, 'square', 0.12), 120);
     setTimeout(() => playTone(784, 'square', 0.25), 240);
     launchConfetti();
 
-    showRevealCard(comp, 'NEXT TURN >>');
+    const nextLabel = (currentRoundIndex < tourneyTotalRounds - 1) ? 'NEXT ROUND >>' : 'SEE FINAL STANDINGS >>';
+    showRevealCard(comp, nextLabel);
   } else {
-    player.lives--;
-    updateLivesDisplay(player.lives);
-    document.getElementById('hud-player-lives').innerText = '❤️ '.repeat(player.lives) + '🖤 '.repeat(3 - player.lives);
+    me.lives = Math.max(0, me.lives - 1);
+    updateLivesDisplay(me.lives);
+    updateTourneyHud();
     playTone(160, 'sawtooth', 0.28);
 
-    if (player.lives > 0) {
+    if (me.lives > 0) {
+      syncMyTourneyStats(me);
       feedbackEl.className = 'feedback-msg feedback-error';
-      feedbackEl.innerText = `❌ Wrong! ${player.name} lost a global life (${player.lives} ❤️ left). Try again or open a door!`;
+      feedbackEl.innerText = `❌ Wrong! ${me.lives} global life(s) left. Open another door or try again!`;
       inputEl.value = '';
     } else {
-      player.eliminated = true;
-      tagEl.innerText = `💀 ELIMINATION: PLAYER ${player.listNumber} (${player.name.toUpperCase()})`;
+      me.eliminated = true;
+      roundAnsweredByMe = true;
+      syncMyTourneyStats(me);
+
+      tagEl.innerText = `💀 ELIMINATION: PLAYER ${me.listNumber} (${me.name.toUpperCase()})`;
       tagEl.className = 'solved-tag failed-tag';
       playTone(130, 'sawtooth', 0.45);
 
-      showRevealCard(comp, 'CONTINUE >>');
+      const nextLabel = (currentRoundIndex < tourneyTotalRounds - 1) ? 'NEXT ROUND >>' : 'SEE FINAL STANDINGS >>';
+      showRevealCard(comp, nextLabel);
     }
+  }
+}
+
+function syncMyTourneyStats(me) {
+  if (isHost) {
+    broadcastTourney({ type: 'ROSTER_UPDATE', players: tourneyPlayers });
+  } else if (conn && conn.open) {
+    conn.send({
+      type: 'CLIENT_SCORE_UPDATE',
+      playerId: me.id,
+      score: me.score,
+      lives: me.lives,
+      eliminated: me.eliminated
+    });
   }
 }
 
@@ -1150,7 +1315,7 @@ function showRevealCard(compObj, nextButtonText) {
   const btnNext = document.getElementById('btn-next-round');
   const waitText = document.getElementById('pvp-next-wait');
 
-  if (activeMode === 'pvp' && !isHost) {
+  if ((activeMode === 'pvp' || activeMode === 'tourney') && !isHost) {
     btnNext.classList.add('hidden');
     waitText.classList.remove('hidden');
   } else {
@@ -1163,11 +1328,21 @@ function showRevealCard(compObj, nextButtonText) {
 }
 
 // =========================================================================
-// AVANZAR RONDA O TURNO
+// AVANZAR RONDA (HOST CONTROLA EL RITMO EN 1V1 Y TORNEO ONLINE)
 // =========================================================================
 function handleNextStep() {
   if (activeMode === 'tourney') {
-    advanceTourneyTurn();
+    const alivePlayers = tourneyPlayers.filter(p => !p.eliminated);
+    const shouldEndEarly = eliminationEnabled && tourneyPlayers.length > 1 && alivePlayers.length <= 1;
+
+    if (currentRoundIndex < tourneyTotalRounds - 1 && !shouldEndEarly) {
+      const nextIdx = currentRoundIndex + 1;
+      broadcastTourney({ type: 'NEXT_TOURNEY_ROUND', roundIndex: nextIdx, players: tourneyPlayers });
+      startTourneyRound(nextIdx);
+    } else {
+      broadcastTourney({ type: 'TOURNEY_GAME_OVER', players: tourneyPlayers });
+      showTourneyGameOver();
+    }
   } else {
     if (currentRoundIndex < activeRounds.length - 1) {
       const nextIdx = currentRoundIndex + 1;
@@ -1177,38 +1352,6 @@ function handleNextStep() {
       if (activeMode === 'pvp' && conn) conn.send({ type: 'GAME_OVER' });
       showSoloOrPvpGameOver();
     }
-  }
-}
-
-function advanceTourneyTurn() {
-  const alivePlayers = tourneyPlayers.filter(p => !p.eliminated);
-
-  if (alivePlayers.length === 0 || (eliminationEnabled && tourneyPlayers.length > 1 && alivePlayers.length === 1)) {
-    showTourneyGameOver();
-    return;
-  }
-
-  let foundNext = false;
-  for (let step = 1; step <= tourneyPlayers.length; step++) {
-    const candidateIdx = (currentPlayerTurnIdx + step) % tourneyPlayers.length;
-    if (candidateIdx <= currentPlayerTurnIdx) {
-      currentTourneyRound++;
-    }
-    if (currentTourneyRound >= tourneyTotalRounds) {
-      showTourneyGameOver();
-      return;
-    }
-    if (!tourneyPlayers[candidateIdx].eliminated) {
-      currentPlayerTurnIdx = candidateIdx;
-      foundNext = true;
-      break;
-    }
-  }
-
-  if (foundNext) {
-    startTourneyTurn();
-  } else {
-    showTourneyGameOver();
   }
 }
 
@@ -1260,7 +1403,7 @@ function showTourneyGameOver() {
   document.getElementById('final-scores-wrapper').classList.add('hidden');
   document.getElementById('summary-components').classList.add('hidden');
   document.getElementById('tourney-final-table-wrap').classList.remove('hidden');
-  document.getElementById('btn-play-again').classList.remove('hidden');
+  document.getElementById('btn-play-again').classList.add('hidden');
 
   const sorted = [...tourneyPlayers].sort((a, b) => {
     if (eliminationEnabled && a.eliminated !== b.eliminated) {
@@ -1294,8 +1437,7 @@ function showTourneyGameOver() {
 
 function replayCurrentMode() {
   if (activeMode === 'solo') startSoloGame();
-  else if (activeMode === 'tourney') startTournament();
-  else openPvpLobby();
+  else openModeSelect();
 }
 
 // =========================================================================
