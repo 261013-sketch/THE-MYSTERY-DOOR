@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ENGLISH GAME ZONE: Mechatronics 1v1 & Solo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Press+Start+2P&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <!-- Librería PeerJS para conexión directa 1 vs 1 sin servidor propio -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="bg-gradient"></div>
+  <div class="cyber-grid"></div>
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- Barra Superior HUD -->
+  <header class="hud-bar">
+    <div class="hud-left">
+      <span id="hud-diff-badge" class="badge-live">● SOLO • NORMAL</span>
+      <span id="hud-round-indicator" class="hud-text">ROUND 1 / 5</span>
+    </div>
+    <div class="hud-center">
+      <!-- Marcador Solo -->
+      <div id="hud-solo-score" class="auto-score-box">
+        SCORE: <span id="player-score">0</span> / 500 PTS
+      </div>
+      <!-- Marcador 1 vs 1 -->
+      <div id="hud-pvp-score" class="pvp-score-box hidden">
+        <span class="p1-tag">YOU: <strong id="p1-score">0</strong></span>
+        <span class="vs-divider">VS</span>
+        <span class="p2-tag">RIVAL: <strong id="p2-score">0</strong></span>
+      </div>
+    </div>
+    <div class="hud-right">
+      <button id="btn-sound" class="hud-btn" onclick="toggleSound()">🔊 SFX: ON</button>
+      <button class="hud-btn" onclick="goHome()">🏠 HOME</button>
+    </div>
+  </header>
+
+  <!-- PANTALLA 1: PORTADA -->
+  <main id="screen-home" class="screen active">
+    <div class="hero-box">
+      <div class="pixel-gamepad">🎮</div>
+      <h1 class="neon-title">ENGLISH GAME ZONE</h1>
+      <h2 class="neon-subtitle">THE MYSTERY DOOR</h2>
+      <div class="presenter-tag">30 COMPONENTS • SOLO &amp; 1 VS 1 SPEED DUEL</div>
+      <button class="btn-arcade-white" onclick="startInstructions()">
+        [ PRESS START TO PLAY ]
+      </button>
+    </div>
+  </main>
+
+  <!-- PANTALLA 2: INSTRUCCIONES Y MODO DE JUEGO -->
+  <section id="screen-instructions" class="screen">
+    <div class="modal-window">
+      <div class="modal-header">
+        <span>SELECT_GAME_MODE.EXE</span>
+        <button class="btn-close-x" onclick="goHome()">X</button>
+      </div>
+      <div class="modal-body">
+        <h2 class="modal-title">HOW TO PLAY</h2>
+        <ul class="rules-list">
+          <li><strong>1.</strong> Open the <strong>4 mystery doors</strong> to read and listen (🔊) to technical clues in English.</li>
+          <li><strong>2.</strong> You have <strong>3 ATTEMPTS (❤️ ❤️ ❤️)</strong> per round. Max score: <strong>500 PTS</strong> (100 pts/round).</li>
+          <li><strong>3. 1 VS 1 DUEL:</strong> Connect with a classmate via Room Code. <strong>Whoever types the right answer first wins the 100 pts!</strong></li>
+        </ul>
+
+        <p class="select-diff-label">STEP 1: SELECT DIFFICULTY LEVEL</p>
+        <div class="difficulty-grid">
+          <button id="diff-btn-easy" class="diff-card easy" onclick="selectDifficulty('easy')">
+            <span class="diff-icon">🟢</span>
+            <span class="diff-name">EASY</span>
+            <span class="diff-desc">LED, Resistor, Breadboard...</span>
+          </button>
+          <button id="diff-btn-normal" class="diff-card normal selected" onclick="selectDifficulty('normal')">
+            <span class="diff-icon">🟡</span>
+            <span class="diff-name">NORMAL</span>
+            <span class="diff-desc">Relay, Servo, Potentiometer...</span>
+          </button>
+          <button id="diff-btn-hard" class="diff-card hard" onclick="selectDifficulty('hard')">
+            <span class="diff-icon">🔴</span>
+            <span class="diff-name">HARD</span>
+            <span class="diff-desc">MOSFET, Encoder, H-Bridge...</span>
+          </button>
+        </div>
+
+        <p class="select-diff-label" style="margin-top: 20px;">STEP 2: CHOOSE PLAY MODE</p>
+        <div class="mode-buttons-row">
+          <button class="btn-arcade-white" onclick="startSoloGame()">
+            👤 SOLO CHALLENGE
+          </button>
+          <button class="btn-arcade-white pvp-btn" onclick="openPvpLobby()">
+            ⚔️ 1 VS 1 SPEED DUEL
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PANTALLA 2B: LOBBY 1 VS 1 (CREAR O UNIRSE A SALA) -->
+  <section id="screen-pvp-lobby" class="screen">
+    <div class="modal-window">
+      <div class="modal-header">
+        <span>1V1_MULTIPLAYER_LINK.EXE</span>
+        <button class="btn-close-x" onclick="startInstructions()">⬅</button>
+      </div>
+      <div class="modal-body">
+        <h2 class="modal-title">⚔️ 1 VS 1 SPEED DUEL</h2>
+        <p class="pvp-subtitle">Selected Difficulty: <strong id="lobby-diff-text" style="color: var(--neon-yellow);">NORMAL</strong></p>
+
+        <div class="pvp-columns">
+          <!-- Columna Crear Sala -->
+          <div class="pvp-box">
+            <h3>HOST A MATCH</h3>
+            <p>Generate a 4-digit Room Code and share it with your classmate.</p>
+            <button id="btn-create-room" class="btn-arcade-white" onclick="createPvpRoom()">CREATE ROOM</button>
+            <div id="host-code-display" class="room-code-box hidden">
+              <span class="code-label">ROOM CODE:</span>
+              <span id="generated-room-code" class="code-digits">----</span>
+              <p id="host-wait-status" class="wait-blink">Waiting for rival to join...</p>
+            </div>
+          </div>
+
+          <!-- Columna Unirse a Sala -->
+          <div class="pvp-box">
+            <h3>JOIN A MATCH</h3>
+            <p>Enter the 4-digit code from your classmate's screen.</p>
+            <input type="text" id="join-code-input" class="guess-input code-input" maxlength="4" placeholder="0000" inputmode="numeric">
+            <button id="btn-join-room" class="btn-submit-guess" style="width: 100%; margin-top: 10px;" onclick="joinPvpRoom()">CONNECT &amp; PLAY ⚔️</button>
+            <p id="join-status-msg" class="feedback-msg"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PANTALLA 3: MENÚ DE 4 PUERTAS -->
+  <section id="screen-doors" class="screen">
+    <div class="doors-header">
+      <h2 id="doors-round-title" class="neon-title-sm">ROUND 1 / 5: THE MYSTERY DOOR</h2>
+      <div class="lives-bar">
+        ATTEMPTS LEFT: <span id="lives-display" class="hearts">❤️ ❤️ ❤️</span>
+        <span id="pvp-rival-status" class="rival-pill hidden">Rival: Searching...</span>
+      </div>
+    </div>
+
+    <div class="doors-grid" id="doors-container"></div>
+
+    <div class="guess-box">
+      <label for="guess-input-doors" class="guess-label">TYPE THE COMPONENT NAME IN ENGLISH:</label>
+      <div class="guess-row">
+        <input type="text" id="guess-input-doors" class="guess-input" placeholder="e.g. Resistor, MOSFET, LED..." autocomplete="off" onkeydown="if(event.key==='Enter') checkAnswer('guess-input-doors')">
+        <button id="btn-submit-doors" class="btn-submit-guess" onclick="checkAnswer('guess-input-doors')">SUBMIT ANSWER ✔</button>
+      </div>
+      <p id="feedback-doors" class="feedback-msg"></p>
+    </div>
+  </section>
+
+  <!-- PANTALLA 4: VISTA DE PISTA CON BOTÓN DE AUDIO -->
+  <section id="screen-clue" class="screen">
+    <div class="clue-card">
+      <div class="clue-top-bar">
+        <button class="btn-back-title" onclick="backToDoors()">⬅ BACK TO DOORS</button>
+        <span class="lives-mini">ATTEMPTS: <span id="lives-display-clue">❤️ ❤️ ❤️</span></span>
+        <span id="clue-number-badge" class="clue-badge">DOOR 01</span>
+      </div>
+      
+      <div class="clue-content">
+        <button id="btn-speak-clue" class="btn-voice-read" onclick="speakCurrentClue()" title="Listen to clue in English">
+          🔊 LISTEN CLUE (EN)
+        </button>
+
+        <p id="clue-en-text" class="clue-text-en">Clue text in English...</p>
+        <p id="clue-es-text" class="clue-text-es hidden">Traducción en español...</p>
+        <button id="btn-toggle-es" class="btn-translate" onclick="toggleSpanish()">🌐 SHOW SPANISH TRANSLATION</button>
+      </div>
+
+      <div class="guess-box compact">
+        <div class="guess-row">
+          <input type="text" id="guess-input-clue" class="guess-input" placeholder="Know the answer? Type it here..." autocomplete="off" onkeydown="if(event.key==='Enter') checkAnswer('guess-input-clue')">
+          <button id="btn-submit-clue" class="btn-submit-guess" onclick="checkAnswer('guess-input-clue')">SUBMIT ✔</button>
+        </div>
+        <p id="feedback-clue" class="feedback-msg"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PANTALLA 5: REVELACIÓN DEL OBJETO -->
+  <section id="screen-reveal" class="screen">
+    <div class="reveal-layout">
+      <div class="retro-monitor">
+        <div class="monitor-screen" id="svg-diagram-container"></div>
+        <div class="monitor-stand"></div>
+      </div>
+
+      <div class="reveal-info">
+        <div class="reveal-top-badges">
+          <span id="reveal-status-tag" class="solved-tag">+100 PTS • CORRECT!</span>
+          <button id="btn-speak-reveal" class="btn-voice-read small" onclick="speakReveal()">
+            🔊 LISTEN PRONUNCIATION
+          </button>
+        </div>
+        <h2 id="reveal-title-en" class="reveal-main-title">IT'S A SOLENOID!</h2>
+        <h3 id="reveal-title-es" class="reveal-sub-title">¡ES UN SOLENOIDE!</h3>
+        <p id="reveal-definition" class="reveal-desc">Definition goes here...</p>
+        
+        <div class="reveal-buttons">
+          <button id="btn-next-round" class="btn-arcade-white" onclick="handleNextRoundClick()">NEXT ROUND &gt;&gt;</button>
+          <p id="pvp-next-wait" class="feedback-msg hidden">Waiting for host to advance...</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PANTALLA 6: RESULTADO FINAL -->
+  <section id="screen-gameover" class="screen">
+    <div class="hero-box">
+      <h1 class="neon-title">CHALLENGE COMPLETE!</h1>
+      <h2 id="final-rank-title" class="neon-subtitle">MECHATRONICS MASTER</h2>
+      <div class="final-scores">
+        <div id="final-score-card" class="final-card">FINAL SCORE: <span id="final-score-total">0</span> / 500 PTS</div>
+      </div>
+      <div class="summary-list" id="summary-components"></div>
+      <div class="gameover-actions">
+        <button id="btn-play-again" class="btn-arcade-white" onclick="replayCurrentMode()">🔄 PLAY AGAIN</button>
+        <button class="btn-arcade-white secondary" onclick="startInstructions()">🎚️ CHANGE MODE / LEVEL</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>
