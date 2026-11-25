@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ENGLISH GAME ZONE: Solo, 1v1 &amp; Tournament</title>
+  <title>ENGLISH GAME ZONE: Solo, 1v1 &amp; Online Tournament</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Press+Start+2P&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
   <div class="bg-gradient"></div>
@@ -34,9 +34,9 @@
         <span class="p2-tag">RIVAL: <strong id="p2-score">0</strong></span>
       </div>
 
-      <!-- HUD Torneo -->
+      <!-- HUD Torneo Online -->
       <div id="hud-tourney-banner" class="active-player-banner hidden">
-        TURN: <span id="hud-player-name">PLAYER 1</span> &nbsp;|&nbsp;
+        <span id="hud-player-name">#1 PLAYER</span> &nbsp;|&nbsp;
         <span id="hud-player-lives">❤️ ❤️ ❤️</span> &nbsp;|&nbsp;
         <span id="hud-player-score" style="color: var(--neon-green);">0 PTS</span>
       </div>
@@ -72,7 +72,7 @@
       </div>
       <div class="modal-body">
         <h3 class="modal-title">👤 ENTER YOUR PLAYER NAME</h3>
-        <p class="setup-note">This profile name will appear across Solo, 1v1, and Tournament modes.</p>
+        <p class="setup-note">This profile name will appear across Solo, 1v1, and Online Tournament modes.</p>
         <input type="text" id="profile-name-input" class="guess-input" maxlength="18" placeholder="e.g. Alex, Engineer_01..." style="text-align:center; margin-bottom:16px; width:100%;" onkeydown="if(event.key==='Enter') saveProfileName()">
         <button class="btn-arcade-white" style="width:100%;" onclick="saveProfileName()">SAVE PROFILE ✔</button>
       </div>
@@ -85,7 +85,7 @@
       <div class="pixel-gamepad">🎮</div>
       <h1 class="neon-title">ENGLISH GAME ZONE</h1>
       <h2 class="neon-subtitle">THE MYSTERY DOOR</h2>
-      <div class="presenter-tag">SOLO • 1 VS 1 DUEL • TOURNAMENT (1-30 PLAYERS)</div>
+      <div class="presenter-tag">SOLO • 1 VS 1 DUEL • ONLINE TOURNAMENT (ROOM CODE)</div>
       <button class="btn-arcade-white" onclick="openModeSelect()">
         [ PRESS START TO PLAY ]
       </button>
@@ -119,7 +119,7 @@
           <button class="mode-card tourney" onclick="openTourneySetup()">
             <span class="mode-icon">🏆</span>
             <span class="mode-name">TOURNAMENT</span>
-            <span class="mode-desc">1 to 30 Players • Progressive difficulty (Easy ➔ Hard) + Survival Elimination!</span>
+            <span class="mode-desc">Up to 30 Devices • Join with a 4-digit Room Code! Progressive Easy ➔ Hard + Elimination!</span>
           </button>
         </div>
       </div>
@@ -197,45 +197,56 @@
     </div>
   </section>
 
-  <!-- PANTALLA 2C: CONFIGURACIÓN TORNEO (1-30 JUGADORES) -->
+  <!-- PANTALLA 2C: LOBBY TORNEO MULTIJUGADOR POR CÓDIGO -->
   <section id="screen-tourney-setup" class="screen">
     <div class="modal-window">
       <div class="modal-header">
-        <span>TOURNAMENT_CONFIG.EXE</span>
+        <span>ONLINE_TOURNAMENT_LOBBY.EXE</span>
         <button class="btn-close-x" onclick="openModeSelect()">⬅</button>
       </div>
       <div class="modal-body">
-        <h2 class="modal-title">🏆 TOURNAMENT SETUP</h2>
-        <p class="setup-note">Difficulty scales automatically from <strong>EASY</strong> to <strong>HARD</strong>. Each player gets <strong>3 GLOBAL LIVES (❤️ ❤️ ❤️)</strong> for the whole match!</p>
+        <h2 class="modal-title">🏆 MULTIPLAYER TOURNAMENT</h2>
+        <p class="setup-note">Progressive difficulty (<strong>EASY ➔ HARD</strong>) • <strong>3 Global Lives (❤️ ❤️ ❤️)</strong> per player!</p>
 
-        <div class="setup-grid">
-          <div class="setup-card">
-            <label for="num-players-input">PLAYERS (1 - 30):</label>
-            <input type="number" id="num-players-input" class="setup-number" min="1" max="30" value="4" onchange="renderPlayerNameInputs()">
+        <div class="pvp-columns">
+          <!-- COLUMNA HOST (CREAR TORNEO) -->
+          <div class="pvp-box">
+            <h3>HOST TOURNAMENT ROOM</h3>
+            <div class="setup-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 12px;">
+              <div class="setup-card">
+                <label for="num-rounds-input">ROUNDS (1 - 30):</label>
+                <input type="number" id="num-rounds-input" class="setup-number" min="1" max="30" value="5">
+              </div>
+              <div class="setup-card">
+                <label>ELIMINATION:</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="elimination-mode-checkbox" checked>
+                  <span>0 LIVES = OUT</span>
+                </label>
+              </div>
+            </div>
+
+            <button id="btn-create-tourney" class="btn-arcade-white" style="width:100%;" onclick="createTourneyRoom()">CREATE TOURNAMENT CODE</button>
+
+            <div id="tourney-host-panel" class="room-code-box hidden">
+              <span class="code-label">SHARE THIS TOURNAMENT CODE:</span>
+              <span id="tourney-room-code" class="code-digits">----</span>
+              <p id="tourney-host-status" class="wait-blink">Waiting for players to join...</p>
+              <div id="tourney-roster-list" class="roster-pills-box"></div>
+              <button id="btn-start-online-tourney" class="btn-submit-guess" style="width:100%; margin-top:12px;" onclick="startOnlineTournament()">🚀 START TOURNAMENT NOW</button>
+            </div>
           </div>
 
-          <div class="setup-card">
-            <label for="num-rounds-input">ROUNDS PER PLAYER (1 - 30):</label>
-            <input type="number" id="num-rounds-input" class="setup-number" min="1" max="30" value="5">
-          </div>
-
-          <div class="setup-card">
-            <label>ELIMINATION (0 LIVES = OUT):</label>
-            <label class="toggle-switch">
-              <input type="checkbox" id="elimination-mode-checkbox" checked>
-              <span>SUDDEN DEATH ON</span>
-            </label>
+          <!-- COLUMNA UNIRSE CON CÓDIGO -->
+          <div class="pvp-box">
+            <h3>JOIN WITH ROOM CODE</h3>
+            <p>Enter the 4-digit Tournament Code displayed on the host screen:</p>
+            <input type="text" id="tourney-join-code" class="guess-input code-input" maxlength="4" placeholder="0000" inputmode="numeric">
+            <button id="btn-join-tourney" class="btn-submit-guess" style="width: 100%; margin-top: 12px;" onclick="joinTourneyRoom()">JOIN TOURNAMENT 🏆</button>
+            <p id="tourney-join-status" class="feedback-msg"></p>
+            <div id="tourney-client-roster" class="roster-pills-box hidden"></div>
           </div>
         </div>
-
-        <div class="names-section">
-          <div class="names-header">PLAYER ROSTER (EDIT NAMES):</div>
-          <div id="player-names-grid" class="player-names-grid"></div>
-        </div>
-
-        <button class="btn-arcade-white" style="margin-top: 18px;" onclick="startTournament()">
-          🚀 START TOURNAMENT &gt;&gt;
-        </button>
       </div>
     </div>
   </section>
@@ -243,7 +254,7 @@
   <!-- PANTALLA 3: MENÚ DE 4 PUERTAS -->
   <section id="screen-doors" class="screen">
     <div class="doors-header">
-      <div id="turn-callout" class="turn-callout hidden">🎮 PLAYER 1'S TURN</div>
+      <div id="turn-callout" class="turn-callout hidden">🎮 #1 PLAYER 1</div>
       <h2 id="doors-round-title" class="neon-title-sm">ROUND 1 / 5: THE MYSTERY DOOR</h2>
       <div class="lives-bar">
         <span id="lives-label-text">ATTEMPTS LEFT:</span>
@@ -350,6 +361,6 @@
     </div>
   </section>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=2"></script>
 </body>
 </html>
