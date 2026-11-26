@@ -6,7 +6,7 @@
   <title>ENGLISH GAME ZONE: Solo, 1v1 &amp; Online Tournament</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Press+Start+2P&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
   <div class="bg-gradient"></div>
@@ -18,13 +18,14 @@
     <div class="hud-left">
       <span id="hud-mode-badge" class="badge-live">● SOLO • NORMAL</span>
       <span id="hud-round-indicator" class="hud-text">ROUND 1 / 5</span>
+      <span id="hud-streak-badge" class="streak-pill hidden">🔥 x2</span>
       <span id="hud-profile-tag" class="hud-text" style="margin-left:10px; color:#ffd166;">👤 PLAYER</span>
     </div>
 
     <div class="hud-center">
       <!-- HUD Solo -->
       <div id="hud-solo-score" class="auto-score-box">
-        SCORE: <span id="player-score">0</span> / 500 PTS
+        SCORE: <span id="player-score">0</span> PTS
       </div>
 
       <!-- HUD 1 vs 1 -->
@@ -44,6 +45,7 @@
 
     <div class="hud-right">
       <button id="btn-standings" class="hud-btn hidden" onclick="toggleScoreboardModal()">🏆 STANDINGS</button>
+      <button class="hud-btn" onclick="openGlossaryModal()">📖 DEX (30)</button>
       <button class="hud-btn" onclick="openProfileModal()">👤 PROFILE</button>
       <button id="btn-sound" class="hud-btn" onclick="toggleSound()">🔊 SFX: ON</button>
       <button class="hud-btn" onclick="goHome()">🏠 HOME</button>
@@ -64,17 +66,90 @@
     </div>
   </div>
 
-  <!-- MODAL DE PERFIL AL ENTRAR -->
-  <div id="profile-overlay" class="overlay-modal">
-    <div class="modal-window small-modal">
+  <!-- MODAL ENCICLOPEDIA DE 30 COMPONENTES -->
+  <div id="glossary-overlay" class="overlay-modal hidden">
+    <div class="modal-window">
       <div class="modal-header">
-        <span>PLAYER_PROFILE.EXE</span>
+        <span>MECHATRONICS_DEX_30.EXE</span>
+        <button class="btn-close-x" onclick="closeGlossaryModal()">X</button>
       </div>
       <div class="modal-body">
-        <h3 class="modal-title">👤 ENTER YOUR PLAYER NAME</h3>
-        <p class="setup-note">This profile name will appear across Solo, 1v1, and Online Tournament modes.</p>
-        <input type="text" id="profile-name-input" class="guess-input" maxlength="18" placeholder="e.g. Alex, Engineer_01..." style="text-align:center; margin-bottom:16px; width:100%;" onkeydown="if(event.key==='Enter') saveProfileName()">
-        <button class="btn-arcade-white" style="width:100%;" onclick="saveProfileName()">SAVE PROFILE ✔</button>
+        <h3 class="modal-title">📖 30 TECHNICAL COMPONENTS (TAP TO LISTEN)</h3>
+        <p class="setup-note">Study vocabulary and English pronunciation before your match.</p>
+        <div id="glossary-grid-list" class="glossary-scroll-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE PERFIL GAMER + ESTADÍSTICAS -->
+  <div id="profile-overlay" class="overlay-modal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <span>PLAYER_PROFILE_&_STATS.EXE</span>
+        <button id="btn-close-profile-x" class="btn-close-x hidden" onclick="closeProfileModal()">X</button>
+      </div>
+      <div class="modal-body">
+        <h3 class="modal-title">👤 GAMER PROFILE &amp; CAREER STATS</h3>
+        <p class="setup-note">Customize your callsign and track your lifetime mechatronics records.</p>
+
+        <div class="profile-name-row">
+          <input type="text" id="profile-name-input" class="guess-input" maxlength="18" placeholder="Enter your player name..." style="text-align:center;" onkeydown="if(event.key==='Enter') saveProfileName()">
+          <button class="btn-arcade-white" onclick="saveProfileName()">SAVE NAME ✔</button>
+        </div>
+
+        <!-- TARJETAS DE ESTADÍSTICAS DE CARRERA -->
+        <div class="stats-dashboard-grid">
+          <div class="stat-tile gold">
+            <span class="stat-label">🏆 MAX TOURNAMENT SCORE</span>
+            <span id="stat-tourney-max" class="stat-value">0 PTS</span>
+          </div>
+          <div class="stat-tile yellow">
+            <span class="stat-label">👑 TOURNAMENT WINS</span>
+            <span id="stat-tourney-wins" class="stat-value">0</span>
+          </div>
+          <div class="stat-tile pink">
+            <span class="stat-label">⚔️ 1 VS 1 DUEL WINS</span>
+            <span id="stat-pvp-wins" class="stat-value">0</span>
+          </div>
+          <div class="stat-tile blue">
+            <span class="stat-label">🎯 SOLO GAMES COMPLETED</span>
+            <span id="stat-solo-completed" class="stat-value">0</span>
+          </div>
+        </div>
+
+        <!-- CONTEO DE VIDAS GASTADAS POR MODO -->
+        <div class="lives-spent-panel">
+          <div class="lives-spent-title">💔 LIFETIME LIVES LOST BY MODE</div>
+          <div class="lives-spent-row">
+            <span>👤 SOLO MODE: <strong id="stat-lives-solo">0</strong> ❤️</span>
+            <span>⚔️ 1 VS 1 DUEL: <strong id="stat-lives-pvp">0</strong> ❤️</span>
+            <span>🏆 TOURNAMENT: <strong id="stat-lives-tourney">0</strong> ❤️</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL GAME OVER DE ELIMINACIÓN EN TORNEO -->
+  <div id="tourney-elim-overlay" class="overlay-modal hidden">
+    <div class="modal-window small-modal" style="border-color: var(--neon-pink); box-shadow: 0 0 40px rgba(255,0,85,0.6);">
+      <div class="modal-header" style="background: var(--neon-pink); color: #ffffff;">
+        <span>ELIMINATION_ALERT.EXE</span>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:3.5rem; margin-bottom:8px;">💀</div>
+        <h2 class="neon-title" style="font-size:2.2rem; color: var(--neon-pink);">GAME OVER</h2>
+        <p id="elim-player-subtitle" class="neon-subtitle" style="font-size:0.9rem; margin-bottom:16px;">YOU WERE ELIMINATED!</p>
+
+        <div class="final-card" style="margin-bottom:18px; font-size:1.2rem;">
+          YOUR SCORE: <span id="elim-score-value">0</span> PTS
+        </div>
+        <p id="elim-rank-estimate" class="setup-note" style="margin-bottom:22px;">Current Standing: #--</p>
+
+        <div class="gameover-actions">
+          <button class="btn-arcade-white" onclick="returnHomeFromElimination()">🏠 RETURN TO HOME</button>
+          <button class="btn-arcade-white secondary" onclick="continueSpectatingTourney()">👁️ STAY &amp; SPECTATE</button>
+        </div>
       </div>
     </div>
   </div>
@@ -85,7 +160,7 @@
       <div class="pixel-gamepad">🎮</div>
       <h1 class="neon-title">ENGLISH GAME ZONE</h1>
       <h2 class="neon-subtitle">THE MYSTERY DOOR</h2>
-      <div class="presenter-tag">SOLO • 1 VS 1 DUEL • ONLINE TOURNAMENT (ROOM CODE)</div>
+      <div class="presenter-tag">MECHATRONICS RIDDLES • VOCABULARY AUDIO • 5 OPTIONS OR TYPE</div>
       <button class="btn-arcade-white" onclick="openModeSelect()">
         [ PRESS START TO PLAY ]
       </button>
@@ -101,13 +176,13 @@
       </div>
       <div class="modal-body">
         <h2 class="modal-title">CHOOSE YOUR GAME MODE</h2>
-        <p class="setup-note">Open the <strong>4 mystery doors</strong>, listen to the clues in English (🔊), and identify the electronic component!</p>
+        <p class="setup-note">Open the <strong>4 mystery doors</strong>, practice <strong>key vocabulary audio (🔊)</strong>, and solve the mechatronics riddle!</p>
 
         <div class="modes-trio-grid">
           <button class="mode-card solo" onclick="openSoloSetup()">
             <span class="mode-icon">👤</span>
             <span class="mode-name">SOLO MODE</span>
-            <span class="mode-desc">1 Player • Choose Easy, Normal, or Hard. 3 lives per round (500 PTS max).</span>
+            <span class="mode-desc">1 Player • Easy, Normal, or Hard (5 random riddles out of 10 per tier).</span>
           </button>
 
           <button class="mode-card pvp" onclick="openPvpSetup()">
@@ -119,14 +194,14 @@
           <button class="mode-card tourney" onclick="openTourneySetup()">
             <span class="mode-icon">🏆</span>
             <span class="mode-name">TOURNAMENT</span>
-            <span class="mode-desc">Up to 30 Devices • Join with a 4-digit Room Code! Progressive Easy ➔ Hard + Elimination!</span>
+            <span class="mode-desc">Up to 30 Devices • Join with a 4-digit Room Code! Easy ➔ Hard + Elimination!</span>
           </button>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- PANTALLA 2A: CONFIGURACIÓN SOLO & 1V1 (DIFICULTAD) -->
+  <!-- PANTALLA 2A: CONFIGURACIÓN SOLO & 1V1 (DIFICULTAD + ESTILO RESPUESTA) -->
   <section id="screen-diff-setup" class="screen">
     <div class="modal-window">
       <div class="modal-header">
@@ -135,7 +210,7 @@
       </div>
       <div class="modal-body">
         <h2 id="diff-screen-heading" class="modal-title">SELECT DIFFICULTY</h2>
-        <p class="setup-note">Each tier contains 10 specialized mechatronics components (5 random rounds per match).</p>
+        <p class="setup-note">Each tier has 10 mechatronics components; 5 random riddles are selected per match.</p>
 
         <div class="difficulty-grid">
           <button id="diff-btn-easy" class="diff-card easy" onclick="selectDifficulty('easy')">
@@ -155,6 +230,20 @@
           </button>
         </div>
 
+        <h3 class="modal-title" style="font-size:1.15rem; margin-top:20px; color:var(--neon-yellow);">ANSWER STYLE</h3>
+        <div class="answer-style-grid">
+          <button id="style-btn-options" class="diff-card selected" onclick="selectAnswerStyle('options')">
+            <span class="diff-icon">🅰️</span>
+            <span class="diff-name">5 OPTIONS (A - E)</span>
+            <span class="diff-desc">1 correct + 4 distractors (3 lives)</span>
+          </button>
+          <button id="style-btn-typing" class="diff-card" onclick="selectAnswerStyle('typing')">
+            <span class="diff-icon">⌨️</span>
+            <span class="diff-name">TYPE ANSWER</span>
+            <span class="diff-desc">Classic riddle: write the name in English</span>
+          </button>
+        </div>
+
         <button id="btn-launch-diff-mode" class="btn-arcade-white" style="margin-top: 22px;" onclick="launchSelectedDiffMode()">
           START MATCH &gt;&gt;
         </button>
@@ -171,7 +260,7 @@
       </div>
       <div class="modal-body">
         <h2 class="modal-title">⚔️ 1 VS 1 SPEED DUEL</h2>
-        <p class="setup-note">Difficulty: <strong id="lobby-diff-text" style="color: var(--neon-yellow);">NORMAL</strong> • Whoever answers first gets the 100 PTS!</p>
+        <p class="setup-note">Difficulty: <strong id="lobby-diff-text" style="color: var(--neon-yellow);">NORMAL</strong> • Whoever answers first gets the round points!</p>
 
         <div class="pvp-columns">
           <div class="pvp-box">
@@ -209,10 +298,9 @@
         <p class="setup-note">Progressive difficulty (<strong>EASY ➔ HARD</strong>) • <strong>3 Global Lives (❤️ ❤️ ❤️)</strong> per player!</p>
 
         <div class="pvp-columns">
-          <!-- COLUMNA HOST (CREAR TORNEO) -->
           <div class="pvp-box">
             <h3>HOST TOURNAMENT ROOM</h3>
-            <div class="setup-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 12px;">
+            <div class="setup-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 12px;">
               <div class="setup-card">
                 <label for="num-rounds-input">ROUNDS (1 - 30):</label>
                 <input type="number" id="num-rounds-input" class="setup-number" min="1" max="30" value="5">
@@ -223,6 +311,13 @@
                   <input type="checkbox" id="elimination-mode-checkbox" checked>
                   <span>0 LIVES = OUT</span>
                 </label>
+              </div>
+              <div class="setup-card">
+                <label for="tourney-answer-style">ANSWER STYLE:</label>
+                <select id="tourney-answer-style" class="setup-number" style="width:100%; font-size:0.82rem;">
+                  <option value="options">5 OPTIONS (A-E)</option>
+                  <option value="typing">TYPE ANSWER</option>
+                </select>
               </div>
             </div>
 
@@ -237,7 +332,6 @@
             </div>
           </div>
 
-          <!-- COLUMNA UNIRSE CON CÓDIGO -->
           <div class="pvp-box">
             <h3>JOIN WITH ROOM CODE</h3>
             <p>Enter the 4-digit Tournament Code displayed on the host screen:</p>
@@ -251,7 +345,7 @@
     </div>
   </section>
 
-  <!-- PANTALLA 3: MENÚ DE 4 PUERTAS -->
+  <!-- PANTALLA 3: MENÚ DE 4 PUERTAS + 5 OPCIONES O ESCRIBIR -->
   <section id="screen-doors" class="screen">
     <div class="doors-header">
       <div id="turn-callout" class="turn-callout hidden">🎮 #1 PLAYER 1</div>
@@ -266,16 +360,22 @@
     <div class="doors-grid" id="doors-container"></div>
 
     <div class="guess-box">
-      <label for="guess-input-doors" class="guess-label">TYPE THE COMPONENT NAME IN ENGLISH:</label>
-      <div class="guess-row">
-        <input type="text" id="guess-input-doors" class="guess-input" placeholder="e.g. Resistor, MOSFET, LED..." autocomplete="off" onkeydown="if(event.key==='Enter') checkAnswer('guess-input-doors')">
-        <button id="btn-submit-doors" class="btn-submit-guess" onclick="checkAnswer('guess-input-doors')">SUBMIT ANSWER ✔</button>
+      <div id="doors-options-wrapper">
+        <span class="guess-label">SELECT THE CORRECT COMPONENT (5 OPTIONS):</span>
+        <div id="options-container-doors" class="options-five-grid"></div>
+      </div>
+      <div id="doors-typing-wrapper" class="hidden">
+        <label for="guess-input-doors" class="guess-label">TYPE THE COMPONENT NAME IN ENGLISH:</label>
+        <div class="guess-row">
+          <input type="text" id="guess-input-doors" class="guess-input" placeholder="e.g. Resistor, MOSFET, LED..." autocomplete="off" onkeydown="if(event.key==='Enter') checkTypedAnswer('guess-input-doors')">
+          <button id="btn-submit-doors" class="btn-submit-guess" onclick="checkTypedAnswer('guess-input-doors')">SUBMIT ✔</button>
+        </div>
       </div>
       <p id="feedback-doors" class="feedback-msg"></p>
     </div>
   </section>
 
-  <!-- PANTALLA 4: VISTA DE PISTA CON BOTÓN DE AUDIO -->
+  <!-- PANTALLA 4: VISTA DE PISTA + VOCABULARIO CLAVE + 5 OPCIONES O ESCRIBIR -->
   <section id="screen-clue" class="screen">
     <div class="clue-card">
       <div class="clue-top-bar">
@@ -285,19 +385,31 @@
       </div>
       
       <div class="clue-content">
-        <button id="btn-speak-clue" class="btn-voice-read" onclick="speakCurrentClue()" title="Listen to clue in English">
-          🔊 LISTEN CLUE (EN)
+        <button id="btn-speak-clue" class="btn-voice-read" onclick="speakCurrentClue()" title="Listen to full clue in English">
+          🔊 LISTEN FULL CLUE (EN)
         </button>
 
         <p id="clue-en-text" class="clue-text-en">Clue text in English...</p>
         <p id="clue-es-text" class="clue-text-es hidden">Traducción en español...</p>
         <button id="btn-toggle-es" class="btn-translate" onclick="toggleSpanish()">🌐 SHOW SPANISH TRANSLATION</button>
+
+        <!-- VOCABULARIO CLAVE DE LA ORACIÓN CON AUDIO -->
+        <div class="vocab-box">
+          <div class="vocab-header">🔑 KEY VOCABULARY FROM THIS CLUE (TAP TO LISTEN):</div>
+          <div id="clue-keywords-list" class="vocab-pills"></div>
+        </div>
       </div>
 
       <div class="guess-box compact">
-        <div class="guess-row">
-          <input type="text" id="guess-input-clue" class="guess-input" placeholder="Know the answer? Type it here..." autocomplete="off" onkeydown="if(event.key==='Enter') checkAnswer('guess-input-clue')">
-          <button id="btn-submit-clue" class="btn-submit-guess" onclick="checkAnswer('guess-input-clue')">SUBMIT ✔</button>
+        <div id="clue-options-wrapper">
+          <span class="guess-label">KNOW THE RIDDLE? PICK FROM 5 OPTIONS:</span>
+          <div id="options-container-clue" class="options-five-grid"></div>
+        </div>
+        <div id="clue-typing-wrapper" class="hidden">
+          <div class="guess-row">
+            <input type="text" id="guess-input-clue" class="guess-input" placeholder="Know the answer? Type it here..." autocomplete="off" onkeydown="if(event.key==='Enter') checkTypedAnswer('guess-input-clue')">
+            <button id="btn-submit-clue" class="btn-submit-guess" onclick="checkTypedAnswer('guess-input-clue')">SUBMIT ✔</button>
+          </div>
         </div>
         <p id="feedback-clue" class="feedback-msg"></p>
       </div>
@@ -322,6 +434,11 @@
         <h2 id="reveal-title-en" class="reveal-main-title">IT'S A SOLENOID!</h2>
         <h3 id="reveal-title-es" class="reveal-sub-title">¡ES UN SOLENOIDE!</h3>
         <p id="reveal-definition" class="reveal-desc">Definition goes here...</p>
+
+        <div class="vocab-box" style="margin-bottom: 18px; text-align: left;">
+          <div class="vocab-header">📚 COMPONENT KEY TERMS (TAP TO PRACTICE AUDIO):</div>
+          <div id="reveal-keywords-list" class="vocab-pills" style="justify-content: flex-start;"></div>
+        </div>
         
         <div class="reveal-buttons">
           <button id="btn-next-round" class="btn-arcade-white" onclick="handleNextStep()">NEXT &gt;&gt;</button>
@@ -337,7 +454,7 @@
       <h1 class="neon-title">CHALLENGE COMPLETE!</h1>
       <h2 id="final-rank-title" class="neon-subtitle">MECHATRONICS MASTER</h2>
       <div id="final-scores-wrapper" class="final-scores">
-        <div id="final-score-card" class="final-card">FINAL SCORE: <span>0</span> / 500 PTS</div>
+        <div id="final-score-card" class="final-card">FINAL SCORE: <span>0</span> PTS</div>
       </div>
       <div class="summary-list" id="summary-components"></div>
       <div id="tourney-final-table-wrap" class="hidden" style="margin-bottom:22px; overflow-x:auto;">
@@ -361,6 +478,6 @@
     </div>
   </section>
 
-  <script src="script.js?v=2"></script>
+  <script src="script.js?v=5"></script>
 </body>
 </html>
